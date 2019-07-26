@@ -198,8 +198,8 @@ def main():
 
         loss.backward()
 
-        torch.nn.utils.clip_grad_norm(feature_encoder.parameters(),0.5)
-        torch.nn.utils.clip_grad_norm(relation_network.parameters(),0.5)
+        torch.nn.utils.clip_grad_norm_(feature_encoder.parameters(),0.5)
+        torch.nn.utils.clip_grad_norm_(relation_network.parameters(),0.5)
 
         feature_encoder_optim.step()
         relation_network_optim.step()

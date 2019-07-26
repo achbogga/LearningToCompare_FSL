@@ -18,6 +18,7 @@ import math
 import argparse
 import scipy as sp
 import scipy.stats
+from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser(description="One Shot Visual Recognition")
 parser.add_argument("-f","--feature_dim",type = int, default = 64)
@@ -124,6 +125,7 @@ def weights_init(m):
         m.bias.data = torch.ones(m.bias.data.size())
 
 def main():
+    writer = SummaryWriter('/home/caffe/achu/logs/pytorch_miniImagenet_FSL.log')
     # Step 1: init data folders
     print("init data folders")
     # init character folders for dataset construction
@@ -201,15 +203,15 @@ def main():
 
         loss.backward()
 
-        torch.nn.utils.clip_grad_norm(feature_encoder.parameters(),0.5)
-        torch.nn.utils.clip_grad_norm(relation_network.parameters(),0.5)
+        torch.nn.utils.clip_grad_norm_(feature_encoder.parameters(),0.5)
+        torch.nn.utils.clip_grad_norm_(relation_network.parameters(),0.5)
 
         feature_encoder_optim.step()
         relation_network_optim.step()
 
-
+        writer.add_scalar('Training loss', loss.data, episode+1)
         if (episode+1)%100 == 0:
-                print("episode:",episode+1,"loss",loss.data[0])
+                print("episode:",episode+1,"loss",loss.data)
 
         if episode%5000 == 0:
 
@@ -256,7 +258,8 @@ def main():
 
             test_accuracy,h = mean_confidence_interval(accuracies)
 
-            print("test accuracy:",test_accuracy,"h:",h)
+            print("validation accuracy:",test_accuracy,"h:",h)
+            writer.add_scalar('Validation accuracy', test_accuracy, episode+1)
 
             if test_accuracy > last_accuracy:
 
