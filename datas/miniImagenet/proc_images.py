@@ -43,6 +43,6 @@ for datatype in ['train', 'val', 'test']:
             image_name = row[0]
             if label != last_label:
                 cur_dir = datatype + '/' + label + '/'
-                os.system('mkdir ' + cur_dir)
+                os.system('mkdir -p' + cur_dir)
                 last_label = label
             os.system('cp images/' + image_name + ' ' + cur_dir)
