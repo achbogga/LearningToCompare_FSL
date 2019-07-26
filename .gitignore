@@ -104,3 +104,6 @@ ENV/
 *.zip
 *.jpg
 *.png
+*.pkl
+
+omniglot/models/*.*
