@@ -106,4 +106,4 @@ ENV/
 *.png
 *.pkl
 
-omniglot/models/*.*
+models/

@@ -140,7 +140,7 @@ def get_data_loader(task, num_per_class=1, split='train',shuffle=True,rotation=0
     # NOTE: batch size here is # instances PER CLASS
     normalize = transforms.Normalize(mean=[0.92206, 0.92206, 0.92206], std=[0.08426, 0.08426, 0.08426])
 
-    dataset = Omniglot(task,split=split,transform=transforms.Compose([Rotate(rotation),transforms.ToTensor(),normalize]))
+    dataset = Omniglot(task,split=split,transform=transforms.Compose([Rotate(rotation),transforms.ToTensor()]))#,normalize]))
 
     if split == 'train':
         sampler = ClassBalancedSampler(num_per_class, task.num_classes, task.train_num,shuffle=shuffle)

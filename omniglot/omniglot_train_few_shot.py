@@ -17,6 +17,7 @@ import os
 import math
 import argparse
 import random
+from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser(description="One Shot Visual Recognition")
 parser.add_argument("-f","--feature_dim",type = int, default = 64)
@@ -116,6 +117,7 @@ def weights_init(m):
         m.bias.data = torch.ones(m.bias.data.size())
 
 def main():
+	writer = SummaryWriter('/home/caffe/achu/logs/pytorch_omniglot_FSL.log')
     # Step 1: init data folders
     print("init data folders")
     # init character folders for dataset construction
@@ -139,10 +141,10 @@ def main():
     relation_network_scheduler = StepLR(relation_network_optim,step_size=100000,gamma=0.5)
 
     if os.path.exists(str("./models/omniglot_feature_encoder_" + str(CLASS_NUM) +"way_" + str(SAMPLE_NUM_PER_CLASS) +"shot.pkl")):
-        feature_encoder.load_state_dict(torch.load(str("./models/omniglot_feature_encoder_" + str(CLASS_NUM) +"way_" + str(SAMPLE_NUM_PER_CLASS) +"shot.pkl")))
+        feature_encoder.load_state_dict(torch.load(str("./models/omniglot_feature_encoder_" + str(CLASS_NUM) +"way_" + str(SAMPLE_NUM_PER_CLASS) +"shot.pkl"), map_location='cuda:0'))
         print("load feature encoder success")
     if os.path.exists(str("./models/omniglot_relation_network_"+ str(CLASS_NUM) +"way_" + str(SAMPLE_NUM_PER_CLASS) +"shot.pkl")):
-        relation_network.load_state_dict(torch.load(str("./models/omniglot_relation_network_"+ str(CLASS_NUM) +"way_" + str(SAMPLE_NUM_PER_CLASS) +"shot.pkl")))
+        relation_network.load_state_dict(torch.load(str("./models/omniglot_relation_network_"+ str(CLASS_NUM) +"way_" + str(SAMPLE_NUM_PER_CLASS) +"shot.pkl"), map_location='cuda:0'))
         print("load relation network success")
 
     # Step 3: build graph
@@ -202,8 +204,10 @@ def main():
         feature_encoder_optim.step()
         relation_network_optim.step()
 
+        writer.add_scalar('Training loss', loss.data, episode+1)
+
         if (episode+1)%100 == 0:
-                print("episode:",episode+1,"loss",loss.data[0])
+                print("episode:",episode+1,"loss",loss.data)
 
         if (episode+1)%5000 == 0:
 
@@ -219,6 +223,8 @@ def main():
 
                 sample_images,sample_labels = sample_dataloader.__iter__().next()
                 test_images,test_labels = test_dataloader.__iter__().next()
+
+                test_labels = test_labels.cuda()
 
                 # calculate features
                 sample_features = feature_encoder(Variable(sample_images).cuda(GPU)) # 5x64
@@ -244,7 +250,8 @@ def main():
 
             test_accuracy = total_rewards/1.0/CLASS_NUM/SAMPLE_NUM_PER_CLASS/TEST_EPISODE
 
-            print("test accuracy:",test_accuracy)
+            print("validation accuracy:",test_accuracy)
+            writer.add_scalar('Validation accuracy', test_accuracy, episode+1)
 
             if test_accuracy > last_accuracy:
 
