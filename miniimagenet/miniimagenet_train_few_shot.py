@@ -241,6 +241,7 @@ def main():
                     test_features_ext = torch.transpose(test_features_ext,0,1)
                     relation_pairs = torch.cat((sample_features_ext,test_features_ext),2).view(-1,FEATURE_DIM*2,19,19)
                     relations = relation_network(relation_pairs).view(-1,CLASS_NUM)
+                    test_labels = test_labels.cuda()
 
                     _,predict_labels = torch.max(relations.data,1)
 
