@@ -24,8 +24,7 @@ class Rotate(object):
         x = x.rotate(self.angle)
         return x
 
-def omniglot_character_folders():
-    data_folder = '../datas/omniglot_resized/'
+def omniglot_character_folders(data_folder = '../datas/omniglot_resized/', no_of_training_samples = 5, no_of_validation_samples = 15):
 
     character_folders = [os.path.join(data_folder, family, character) \
                 for family in os.listdir(data_folder) \
@@ -34,9 +33,10 @@ def omniglot_character_folders():
     random.seed(1)
     random.shuffle(character_folders)
 
-    num_train = 1200
-    metatrain_character_folders = character_folders[:num_train]
-    metaval_character_folders = character_folders[num_train:]
+    
+    character_folders = [folder for folder in character_folders if len(folder)>=(no_of_training_samples+no_of_validation_samples)]
+    metatrain_character_folders = character_folders[:no_of_training_samples]
+    metaval_character_folders = character_folders[no_of_training_samples:]
 
     return metatrain_character_folders,metaval_character_folders
 
