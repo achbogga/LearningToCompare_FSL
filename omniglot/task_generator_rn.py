@@ -34,7 +34,7 @@ def omniglot_character_folders(data_folder = '../datas/omniglot_resized/', no_of
     random.shuffle(character_folders)
 
     
-    character_folders = [folder for folder in character_folders if len(folder)>=(no_of_training_samples+no_of_validation_samples)]
+    character_folders = [folder for folder in character_folders if len(os.listdir(folder))>=(no_of_training_samples+no_of_validation_samples)]
     metatrain_character_folders = character_folders[:no_of_training_samples]
     metaval_character_folders = character_folders[no_of_training_samples:]
 
