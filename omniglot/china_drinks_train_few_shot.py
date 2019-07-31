@@ -31,6 +31,7 @@ parser.add_argument("--test_episode", type = int, default = 100)
 parser.add_argument("--learning_rate", type = float, default = 0.001)
 parser.add_argument("--validation_split_percentage", type = float, default = 0.1)
 parser.add_argument("--gpu",type=int, default=0)
+parser.add_argument("--mixed_precision_training_optim_level",type=str, default='O2')
 parser.add_argument("--hidden_unit",type=int,default=512)
 parser.add_argument("--image_size",type=int,default=160)
 parser.add_argument("--record_training_loss_every_n_episodes", type=int, default = 10)
@@ -39,17 +40,17 @@ args = parser.parse_args()
 
 
 def get_cnn_output_dims(W, K, P, S):
-    return (int(W-K+2*P)/S)+1
+	return (int(W-K+2*P)/S)+1
 def cnn_final_output_dims(image_size):
-    dim1_calc = get_cnn_output_dims(image_size, 3, 0, 1)/2
-    dim2_calc = get_cnn_output_dims(dim1_calc, 3, 0, 1)/2
-    dim3_calc = get_cnn_output_dims(dim2_calc, 3, 1, 1)
-    final_output = get_cnn_output_dims(dim3_calc, 3, 1, 1)
-    return final_output
+	dim1_calc = get_cnn_output_dims(image_size, 3, 0, 1)/2
+	dim2_calc = get_cnn_output_dims(dim1_calc, 3, 0, 1)/2
+	dim3_calc = get_cnn_output_dims(dim2_calc, 3, 1, 1)
+	final_output = get_cnn_output_dims(dim3_calc, 3, 1, 1)
+	return int(final_output)
 def rn_dims_before_FCN(input_dims):
-    dim1_calc = get_cnn_output_dims(input_dims, 3, 1, 1)/2
-    final_output = get_cnn_output_dims(dim1_calc, 3, 1, 1)/2
-    return final_output
+	dim1_calc = get_cnn_output_dims(input_dims, 3, 1, 1)/2
+	final_output = get_cnn_output_dims(dim1_calc, 3, 1, 1)/2
+	return int(final_output)
 
 class CNNEncoder(nn.Module):
 	"""docstring for ClassName"""
@@ -124,6 +125,14 @@ def weights_init(m):
 
 def main():
 	writer = SummaryWriter(args.event_logs)
+
+	try:
+		from apex import amp
+		APEX_AVAILABLE = True
+	except ModuleNotFoundError:
+		print ('Apex not available')
+		APEX_AVAILABLE = False
+
 	# Step 1: init data folders
 	print("init data folders")
 	# init sku folders for dataset construction
@@ -143,7 +152,19 @@ def main():
 	feature_encoder.apply(weights_init)
 	relation_network.apply(weights_init)
 
-	if torch.cuda.device_count() >= 1:
+	relation_network.cuda(args.gpu)
+	feature_encoder.cuda(args.gpu)
+
+	feature_encoder_optim = torch.optim.Adam(feature_encoder.parameters(),lr=args.learning_rate)
+	feature_encoder_scheduler = StepLR(feature_encoder_optim,step_size=100000,gamma=0.5)
+	relation_network_optim = torch.optim.Adam(relation_network.parameters(),lr=args.learning_rate)
+	relation_network_scheduler = StepLR(relation_network_optim,step_size=100000,gamma=0.5)
+
+	if args.mixed_precision_training_optim_level and APEX_AVAILABLE:
+		#init mixed precision network and optimizer
+		[feature_encoder, relation_network], [feature_encoder_optim, relation_network_optim] = amp.initialize([feature_encoder, relation_network], [feature_encoder_optim, relation_network_optim], opt_level=args.mixed_precision_training_optim_level, keep_batchnorm_fp32=True, loss_scale="dynamic")
+
+	if torch.cuda.device_count() > 1:
 		print("CUDA devices found", torch.cuda.device_count(), args.gpu)
 		feature_encoder = nn.DataParallel(feature_encoder)
 		relation_network = nn.DataParallel(relation_network)
@@ -151,10 +172,6 @@ def main():
 		feature_encoder.cuda(args.gpu)
 		relation_network.cuda(args.gpu)
 
-	feature_encoder_optim = torch.optim.Adam(feature_encoder.parameters(),lr=args.learning_rate)
-	feature_encoder_scheduler = StepLR(feature_encoder_optim,step_size=100000,gamma=0.5)
-	relation_network_optim = torch.optim.Adam(relation_network.parameters(),lr=args.learning_rate)
-	relation_network_scheduler = StepLR(relation_network_optim,step_size=100000,gamma=0.5)
 
 	if os.path.exists(str("./models/omniglot_feature_encoder_" + str(args.class_num) +"way_" + str(args.training_samples_per_class) +"shot.pkl")):
 		feature_encoder.load_state_dict(torch.load(str("/home/caffe/achu/models/china_drinks_feature_encoder_" + str(args.class_num) +"way_" + str(args.training_samples_per_class) +"shot.pkl"), map_location='cuda:0'))
@@ -212,10 +229,17 @@ def main():
 		feature_encoder.zero_grad()
 		relation_network.zero_grad()
 
-		loss.backward()
-
-		torch.nn.utils.clip_grad_norm_(feature_encoder.parameters(),0.5)
-		torch.nn.utils.clip_grad_norm_(relation_network.parameters(),0.5)
+		#Mixed precision option
+		if args.mixed_precision_training_optim_level and APEX_AVAILABLE:
+			torch.nn.utils.clip_grad_norm_(amp.master_params(relation_network_optim),0.5)
+			torch.nn.utils.clip_grad_norm_(amp.master_params(feature_encoder_optim),0.5)
+			with amp.scale_loss(loss, [feature_encoder_optim, relation_network_optim]) as scaled_loss:
+				scaled_loss.backward()
+		else:
+			loss.backward()
+			torch.nn.utils.clip_grad_norm_(relation_network.parameters(),0.5)
+			torch.nn.utils.clip_grad_norm_(feature_encoder.parameters(),0.5)
+		
 
 		feature_encoder_optim.step()
 		relation_network_optim.step()
