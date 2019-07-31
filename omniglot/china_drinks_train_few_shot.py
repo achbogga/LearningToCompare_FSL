@@ -21,13 +21,14 @@ from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser(description="Few Shot Visual Recognition for China Drinks Dataset")
 parser.add_argument("--dataset_folder",type = str, default = '/home/caffe/achu/Data/china_drinks/image_data/cropped_images')
+parser.add_argument("--event_logs",type = str, default = '/home/caffe/achu/logs/pytorch_china_drinks_FSL_event_logs')
 parser.add_argument("--channel_dim",type = int, default = 64)
 parser.add_argument("--class_num",type = int, default = 150)
 parser.add_argument("--training_samples_per_class",type = int, default = 5)
 parser.add_argument("--support_set_samples_per_class",type = int, default = 20)
 parser.add_argument("--episode",type = int, default= 10000)
 parser.add_argument("--test_episode", type = int, default = 100)
-parser.add_argument("--learning_rate", type = float, default = 0.05)
+parser.add_argument("--learning_rate", type = float, default = 0.001)
 parser.add_argument("--validation_split_percentage", type = float, default = 0.1)
 parser.add_argument("--gpu",type=int, default=0)
 parser.add_argument("--hidden_unit",type=int,default=512)
@@ -103,7 +104,7 @@ class RelationNetwork(nn.Module):
 		out = self.layer2(out)
 		out = out.view(out.size(0),-1)
 		out = F.relu(self.fc1(out))
-		out = F.sigmoid(self.fc2(out))
+		out = torch.sigmoid(self.fc2(out))
 		return out
 
 def weights_init(m):
@@ -122,7 +123,7 @@ def weights_init(m):
 		m.bias.data = torch.ones(m.bias.data.size())
 
 def main():
-	writer = SummaryWriter('/home/caffe/achu/logs/pytorch_china_drinks_FSL_100W_5S')
+	writer = SummaryWriter(args.event_logs)
 	# Step 1: init data folders
 	print("init data folders")
 	# init sku folders for dataset construction
@@ -143,7 +144,7 @@ def main():
 	relation_network.apply(weights_init)
 
 	if torch.cuda.device_count() >= 1:
-		print("Let's use", torch.cuda.device_count(), args.gpu)
+		print("CUDA devices found", torch.cuda.device_count(), args.gpu)
 		feature_encoder = nn.DataParallel(feature_encoder)
 		relation_network = nn.DataParallel(relation_network)
 	else:
