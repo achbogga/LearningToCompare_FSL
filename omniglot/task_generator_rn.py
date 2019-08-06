@@ -34,7 +34,7 @@ def omniglot_character_folders(data_folder = '../datas/omniglot_resized/', no_of
     random.shuffle(character_folders)
 
     
-    character_folders = [folder for folder in character_folders if len(folder)>=(no_of_training_samples+no_of_validation_samples)]
+    character_folders = [folder for folder in character_folders if len(os.listdir(folder))>=(no_of_training_samples+no_of_validation_samples)]
     metatrain_character_folders = character_folders[:no_of_training_samples]
     metaval_character_folders = character_folders[no_of_training_samples:]
 
@@ -46,12 +46,15 @@ class OmniglotTask(object):
     # For meta testing, we use 1 or 5 shot samples for training, while using the same number of samples for validation.
     # If set num_samples = 20 and chracter_folders = metatrain_character_folders, we generate tasks for meta training
     # If set num_samples = 1 or 5 and chracter_folders = metatest_chracter_folders, we generate tasks for meta testing
-    def __init__(self, character_folders, num_classes, train_num,test_num):
+    def __init__(self, character_folders, num_classes, train_num,test_num, image_size = 28):
 
         self.character_folders = character_folders
         self.num_classes = num_classes
         self.train_num = train_num
         self.test_num = test_num
+        self.image_size = image_size
+
+        #print ('Sampling :', num_classes, ' from ', len(character_folders))
 
         class_folders = random.sample(self.character_folders,self.num_classes)
         labels = np.array(range(len(class_folders)))
@@ -77,11 +80,12 @@ class OmniglotTask(object):
 
 class FewShotDataset(Dataset):
 
-    def __init__(self, task, split='train', transform=None, target_transform=None):
+    def __init__(self, task, image_size = 48, split='train', transform=None, target_transform=None):
         self.transform = transform # Torch operations on the input image
         self.target_transform = target_transform
         self.task = task
         self.split = split
+        self.image_size = image_size
         self.image_roots = self.task.train_roots if self.split == 'train' else self.task.test_roots
         self.labels = self.task.train_labels if self.split == 'train' else self.task.test_labels
 
@@ -101,7 +105,7 @@ class Omniglot(FewShotDataset):
         image_root = self.image_roots[idx]
         image = Image.open(image_root)
         image = image.convert('L')
-        image = image.resize((28,28), resample=Image.LANCZOS) # per Chelsea's implementation
+        image = image.resize((self.image_size,self.image_size), resample=Image.LANCZOS) # per Chelsea's implementation
         #image = np.array(image, dtype=np.float32)
         if self.transform is not None:
             image = self.transform(image)
@@ -136,11 +140,11 @@ class ClassBalancedSampler(Sampler):
         return 1
 
 
-def get_data_loader(task, num_per_class=1, split='train',shuffle=True,rotation=0):
+def get_data_loader(task, image_size = 48, num_per_class=1, split='train',shuffle=True,rotation=0):
     # NOTE: batch size here is # instances PER CLASS
     normalize = transforms.Normalize(mean=[0.92206, 0.92206, 0.92206], std=[0.08426, 0.08426, 0.08426])
 
-    dataset = Omniglot(task,split=split,transform=transforms.Compose([Rotate(rotation),transforms.ToTensor()]))#,normalize]))
+    dataset = Omniglot(task, image_size = image_size, split=split, transform=transforms.Compose([Rotate(rotation),transforms.ToTensor()]))#,normalize]))
 
     if split == 'train':
         sampler = ClassBalancedSampler(num_per_class, task.num_classes, task.train_num,shuffle=shuffle)
