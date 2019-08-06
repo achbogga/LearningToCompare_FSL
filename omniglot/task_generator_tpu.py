@@ -182,7 +182,12 @@ class ClassBalancedSampler(Sampler):
 			random.shuffle(query_batch)
 
 		#print (np.array(train_batch).shape, np.array(query_batch).shape, train_batch[0], query_batch[0])
-		assert(np.array(train_batch).shape == np.array(query_batch).shape)
+		try:
+			assert(np.array(train_batch).shape == np.array(query_batch).shape)
+		except AssertionError:
+			print (np.array(train_batch).shape, np.array(query_batch).shape)
+			raise AssertionError
+			return iter([(None, None)])
 		#train_batch, query_batch
 		return iter(zip(train_batch, query_batch))
 
@@ -198,7 +203,7 @@ def get_data_loader(task, image_size = 160, sample_num_per_class=1, query_num_pe
 	
 	sampler = ClassBalancedSampler(sample_num_per_class, query_num_per_class, task.num_classes, task.train_num, task.test_num, train_shuffle=train_shuffle, test_shuffle=query_shuffle)
 	
-	loader = DataLoader(dataset, batch_size=(sample_num_per_class+query_num_per_class)*task.num_classes, sampler=sampler, num_workers=num_workers)
+	loader = DataLoader(dataset, batch_size=(int(min(sample_num_per_class, query_num_per_class)))*task.num_classes, sampler=sampler, num_workers=num_workers)
 
 	return loader
 
