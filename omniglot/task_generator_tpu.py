@@ -98,6 +98,10 @@ class FewShotDataset(Dataset):
 		self.target_transform = target_transform
 		self.task = task
 		self.image_size = image_size
+		self.train_roots = self.task.train_roots
+		self.test_roots = self.task.test_roots
+		self.train_labels = self.task.train_labels
+		self.test_labels = self.task.test_labels
 
 	def __len__(self):
 		return len(self.train_roots)+len(self.test_roots)
@@ -111,7 +115,9 @@ class ChinaDrinks(FewShotDataset):
 	def __init__(self, *args, **kwargs):
 		super(ChinaDrinks, self).__init__(*args, **kwargs)
 
-	def __getitem__(self, train_idx, test_idx):
+	def __getitem__(self, idx):
+		train_idx = idx[0]
+		test_idx = idx[1]
 		try:
 			train_image_root = self.train_roots[train_idx]
 			train_image = Image.open(train_image_root)
@@ -161,7 +167,7 @@ class ClassBalancedSampler(Sampler):
 			train_batch = [[i+j*self.train_num_inst for i in torch.randperm(self.train_num_inst)[:self.sample_num_per_class]] for j in range(self.num_cl)]
 		else:
 			train_batch = [[i+j*self.train_num_inst for i in range(self.train_num_inst)[:self.sample_num_per_class]] for j in range(self.num_cl)]
-		train_batch = [item for sublist in batch for item in sublist]
+		train_batch = [item for sublist in train_batch for item in sublist]
 
 		if self.train_shuffle:
 			random.shuffle(train_batch)
@@ -170,13 +176,15 @@ class ClassBalancedSampler(Sampler):
 			query_batch = [[i+j*self.test_num_inst for i in torch.randperm(self.test_num_inst)[:self.query_num_per_class]] for j in range(self.num_cl)]
 		else:
 			query_batch = [[i+j*self.test_num_inst for i in range(self.test_num_inst)[:self.query_num_per_class]] for j in range(self.num_cl)]
-		query_batch = [item for sublist in batch for item in sublist]
+		query_batch = [item for sublist in query_batch for item in sublist]
 
-		if self.shuffle:
+		if self.test_shuffle:
 			random.shuffle(query_batch)
 
-
-		return iter(train_batch), iter(query_batch)
+		#print (np.array(train_batch).shape, np.array(query_batch).shape, train_batch[0], query_batch[0])
+		assert(np.array(train_batch).shape == np.array(query_batch).shape)
+		#train_batch, query_batch
+		return iter(zip(train_batch, query_batch))
 
 	def __len__(self):
 		return 1
@@ -185,10 +193,10 @@ def get_data_loader(task, image_size = 160, sample_num_per_class=1, query_num_pe
 	# NOTE: batch size here is # instances PER CLASS
 	normalize = transforms.Normalize(mean=[0.92206, 0.92206, 0.92206], std=[0.08426, 0.08426, 0.08426])
 
-	dataset = ChinaDrinks(task, split=split, image_size = image_size, transform=transforms.Compose([Rotate(rotation),transforms.ToTensor()]))#,normalize]))
+	dataset = ChinaDrinks(task, image_size = image_size, transform=transforms.Compose([Rotate(rotation),transforms.ToTensor()]))#,normalize]))
 
 	
-	sampler = ClassBalancedSampler(num_per_class, task.num_classes, task.train_num, task.test_num, train_shuffle=shuffle, test_shuffle=test_shuffle)
+	sampler = ClassBalancedSampler(sample_num_per_class, query_num_per_class, task.num_classes, task.train_num, task.test_num, train_shuffle=train_shuffle, test_shuffle=query_shuffle)
 	
 	loader = DataLoader(dataset, batch_size=(sample_num_per_class+query_num_per_class)*task.num_classes, sampler=sampler, num_workers=num_workers)
 
