@@ -93,19 +93,16 @@ class ChinaDrinksTask(object):
 
 class FewShotDataset(Dataset):
 
-	def __init__(self, task, image_size = 160, split='train', transform=None, target_transform=None):
+	def __init__(self, task, image_size = 160, transform=None, target_transform=None):
 		self.transform = transform # Torch operations on the input image
 		self.target_transform = target_transform
 		self.task = task
-		self.split = split
 		self.image_size = image_size
-		self.image_roots = self.task.train_roots if self.split == 'train' else self.task.test_roots
-		self.labels = self.task.train_labels if self.split == 'train' else self.task.test_labels
 
 	def __len__(self):
-		return len(self.image_roots)
+		return len(self.train_roots)+len(self.test_roots)
 
-	def __getitem__(self, idx):
+	def __getitem__(self, train_idx, test_idx):
 		raise NotImplementedError("This is an abstract class. Subclass this class for your particular dataset.")
 
 
@@ -114,22 +111,36 @@ class ChinaDrinks(FewShotDataset):
 	def __init__(self, *args, **kwargs):
 		super(ChinaDrinks, self).__init__(*args, **kwargs)
 
-	def __getitem__(self, idx):
+	def __getitem__(self, train_idx, test_idx):
 		try:
-			image_root = self.image_roots[idx]
-			image = Image.open(image_root)
-			image = image.convert('L')
-			image = image.resize((self.image_size,self.image_size), resample=Image.LANCZOS) # per Chelsea's implementation
+			train_image_root = self.train_roots[train_idx]
+			train_image = Image.open(train_image_root)
+			train_image = train_image.convert('L')
+			train_image = train_image.resize((self.image_size,self.image_size), resample=Image.LANCZOS) # per Chelsea's implementation
 			#image = np.array(image, dtype=np.float32)
 			if self.transform is not None:
-				image = self.transform(image)
-			label = self.labels[idx]
+				train_image = self.transform(train_image)
+			train_label = self.train_labels[train_idx]
 			if self.target_transform is not None:
-				label = self.target_transform(label)
-			return image, label
+				train_label = self.target_transform(train_label)
 		except IndexError:
-			print ('Index Error: ', idx, len(self.image_roots))
-			return None, None
+			print ('Index Error: ', train_idx, len(self.train_roots))
+			return None, None, None, None
+		try:
+			test_image_root = self.test_roots[test_idx]
+			test_image = Image.open(test_image_root)
+			test_image = test_image.convert('L')
+			test_image = test_image.resize((self.image_size,self.image_size), resample=Image.LANCZOS) # per Chelsea's implementation
+			#image = np.array(image, dtype=np.float32)
+			if self.transform is not None:
+				test_image = self.transform(test_image)
+			test_label = self.test_labels[test_idx]
+			if self.target_transform is not None:
+				test_label = self.target_transform(test_label)
+		except IndexError:
+			print ('Index Error: ', test_idx, len(self.test_roots))
+			return None, None, None, None
+		return train_image, train_label, test_image, test_label
 
 class ClassBalancedSampler(Sampler):
 	''' Samples 'num_inst' examples each from 'num_cl' pools
@@ -145,16 +156,27 @@ class ClassBalancedSampler(Sampler):
 		self.test_shuffle = test_shuffle
 
 	def __iter__(self):
-		# return a single list of indices, assuming that items will be grouped by class
-		if self.shuffle:
-			batch = [[i+j*self.num_inst for i in torch.randperm(self.num_inst)[:self.num_per_class]] for j in range(self.num_cl)]
+		# Sample train -> return a single list of indices, assuming that items will be grouped by class
+		if self.train_shuffle:
+			train_batch = [[i+j*self.train_num_inst for i in torch.randperm(self.train_num_inst)[:self.sample_num_per_class]] for j in range(self.num_cl)]
 		else:
-			batch = [[i+j*self.num_inst for i in range(self.num_inst)[:self.num_per_class]] for j in range(self.num_cl)]
-		batch = [item for sublist in batch for item in sublist]
+			train_batch = [[i+j*self.train_num_inst for i in range(self.train_num_inst)[:self.sample_num_per_class]] for j in range(self.num_cl)]
+		train_batch = [item for sublist in batch for item in sublist]
+
+		if self.train_shuffle:
+			random.shuffle(train_batch)
+		
+		if self.test_shuffle:
+			query_batch = [[i+j*self.test_num_inst for i in torch.randperm(self.test_num_inst)[:self.query_num_per_class]] for j in range(self.num_cl)]
+		else:
+			query_batch = [[i+j*self.test_num_inst for i in range(self.test_num_inst)[:self.query_num_per_class]] for j in range(self.num_cl)]
+		query_batch = [item for sublist in batch for item in sublist]
 
 		if self.shuffle:
-			random.shuffle(batch)
-		return iter(batch)
+			random.shuffle(query_batch)
+
+
+		return iter(train_batch), iter(query_batch)
 
 	def __len__(self):
 		return 1
