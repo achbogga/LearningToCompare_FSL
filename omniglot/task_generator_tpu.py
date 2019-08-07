@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from torch.utils.data.sampler import Sampler
 
+
 def imshow(img):
 	npimg = img.numpy()
 	plt.axis("off")
@@ -65,7 +66,12 @@ class ChinaDrinksTask(object):
 
 		#print ('Sampling :', num_classes, ' from ', len(sku_folders))
 
-		class_folders = random.sample(self.sku_folders,self.num_classes)
+		try:
+			class_folders = random.sample(self.sku_folders,self.num_classes)
+		except ValueError:
+			print ('Sampling :', num_classes, ' from ', len(sku_folders))
+			raise ValueError
+
 		selected_skus = [folder.split('/')[-1] for folder in class_folders]
 		labels_ar = np.array(range(len(selected_skus)))
 		labels = dict(zip(selected_skus, labels_ar))
